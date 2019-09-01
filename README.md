@@ -3,8 +3,7 @@
 ## Directories
 
 ### input_data
-The data contains GTFS (General Transit Feed Specificatio) feeds published 
-by the israeli ministry if transportation (MOT), and other input data for accessibility computations. 
+The data contains GTFS (General Transit Feed Specificatio) feeds published by the israeli ministry of transportation (MOT), and other input data for accessibility computations. 
 
 The GTFS data can by downloaded from ftp://199.203.58.18/.
 
