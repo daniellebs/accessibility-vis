@@ -76,20 +76,21 @@ class GraphGenerator(Neo4jClient):
     @staticmethod
     def _add_node(tx, **kwargs):
         """Override"""
-        tx.run("CREATE (a:Node) "
-               "SET a.i = $i "
-               "SET a.j = $j ",
-               i=str(kwargs['i']),
-               j=str(kwargs['j']))
+        i = kwargs['i']
+        j = kwargs['j']
+        query = f"CREATE (a:Node {{name:'{str((i,j))}'}}) SET " \
+            f"a.i = {i} SET a.j = {j}"
+        tx.run(query)
 
     @staticmethod
     def _add_edge(tx, **kwargs):
         """Override"""
         query = f"MATCH (a:Node),(b:Node) WHERE " \
-            f"a.i = '{int(kwargs['from_i'])}' AND " \
-            f"a.j = '{int(kwargs['from_j'])}' AND " \
-            f"b.i = '{int(kwargs['to_i'])}' AND " \
-            f"b.j = '{int(kwargs['to_j'])}' CREATE (a)-[:CONNECTS]->(b)"
+            f"a.i = {int(kwargs['from_i'])} AND " \
+            f"a.j = {int(kwargs['from_j'])} AND " \
+            f"b.i = {int(kwargs['to_i'])} AND " \
+            f"b.j = {int(kwargs['to_j'])} CREATE " \
+            f"(a)-[:CONNECTS {{time: {kwargs['w']}}}]->(b)"
         # TODO: add weight
         tx.run(query)
 
