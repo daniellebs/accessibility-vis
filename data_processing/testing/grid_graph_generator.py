@@ -100,7 +100,7 @@ if __name__ == '__main__':
         credentials = json.load(f)
         graph_generator = GraphGenerator(credentials['neo4j']['uri'],
                                          credentials['neo4j']['user'],
-                                         credentials['neo4j']['password'], 10,
-                                         10, 0.5)
+                                         credentials['neo4j']['password'], 100,
+                                         100, 0.5)
         graph_generator.generate_planar_grid_graph()
         graph_generator.close()

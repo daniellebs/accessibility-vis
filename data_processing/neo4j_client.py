@@ -40,7 +40,8 @@ class Neo4jClient(object):
         :return: None
         """
         with self._driver.session() as session:
-            for index, row in tqdm(nodes_df.iterrows()):
+            for index, row in tqdm(nodes_df.iterrows(), total=len(nodes_df),
+                                   unit='nodes'):
                 arguments = {}
                 for arg in argv:
                     arguments[arg] = row[arg]
@@ -57,15 +58,16 @@ class Neo4jClient(object):
         """
         raise UnimplementedException()
 
-    def add_edges(self, nodes_df, *argv):
+    def add_edges(self, edges_df, *argv):
         """Adds given edges to the connected graph.
 
-        :param nodes_df: pandas dataframe containing list of edges.
+        :param edges_df: pandas dataframe containing list of edges.
         :param argv: arguments representing the nodes' properties names.
         :return: None
         """
         with self._driver.session() as session:
-            for index, row in tqdm(nodes_df.iterrows()):
+            for index, row in tqdm(edges_df.iterrows(), total=len(edges_df),
+                                   unit='edges'):
                 arguments = {}
                 for arg in argv:
                     arguments[arg] = row[arg]
