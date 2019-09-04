@@ -83,6 +83,10 @@ class GraphGenerator(Neo4jClient):
         tx.run(query)
 
     @staticmethod
+    def _create_index(tx):
+        tx.run("CREATE INDEX ON :Node(i, j)")
+
+    @staticmethod
     def _add_edge(tx, **kwargs):
         """Override"""
         query = f"MATCH (a:Node),(b:Node) WHERE " \
@@ -91,7 +95,6 @@ class GraphGenerator(Neo4jClient):
             f"b.i = {int(kwargs['to_i'])} AND " \
             f"b.j = {int(kwargs['to_j'])} CREATE " \
             f"(a)-[:CONNECTS {{time: {kwargs['w']}}}]->(b)"
-        # TODO: add weight
         tx.run(query)
 
 
@@ -100,7 +103,9 @@ if __name__ == '__main__':
         credentials = json.load(f)
         graph_generator = GraphGenerator(credentials['neo4j']['uri'],
                                          credentials['neo4j']['user'],
-                                         credentials['neo4j']['password'], 100,
-                                         100, 0.5)
+                                         credentials['neo4j']['password'], 700,
+                                         700, 0.5)
         graph_generator.generate_planar_grid_graph()
+        # TODO(danielle): write method to iterate nodes and get SP for all
+        # print(type(graph_generator.get_single_source_shortest_paths('name', '(0, 0)')))
         graph_generator.close()

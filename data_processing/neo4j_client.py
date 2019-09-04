@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 from neo4j import GraphDatabase, basic_auth
+import pandas as pd
 from tqdm import tqdm
 
 parser = argparse.ArgumentParser(
@@ -46,6 +47,7 @@ class Neo4jClient(object):
                 for arg in argv:
                     arguments[arg] = row[arg]
                 session.write_transaction(self._add_node, **arguments)
+            session.write_transaction(self._create_index)
 
     @staticmethod
     def _add_node(tx, **kwargs):
@@ -54,6 +56,16 @@ class Neo4jClient(object):
         Must be overridden.
         :param tx: transaction to run.
         :param kwargs: keyword parameters for the node properties.
+        :return: None
+        """
+        raise UnimplementedException()
+
+    @staticmethod
+    def _create_index(tx):
+        """Creates a new index using the provided transaction.
+
+        Must be overridden.
+        :param tx: transaction to run.
         :return: None
         """
         raise UnimplementedException()
@@ -83,6 +95,20 @@ class Neo4jClient(object):
         :return: None
         """
         raise UnimplementedException()
+
+    def get_single_source_shortest_paths(self, id_field, id_value):
+        def sssp(tx):
+            query = f"MATCH (n:Node {{{id_field}:'{id_value}'}}) " \
+                f"CALL algo.shortestPath.deltaStepping.stream(n, 'time', 3.0) " \
+                f"YIELD nodeId, distance " \
+                f"RETURN algo.asNode(nodeId).name AS destination, distance"
+            result = tx.run(query)
+            return pd.DataFrame([r.values() for r in result],
+                                columns=result.keys())
+
+        with self._driver.session() as session:
+            # TODO(danielle): save results
+            return session.write_transaction(sssp)
 
 
 if __name__ == '__main__':
