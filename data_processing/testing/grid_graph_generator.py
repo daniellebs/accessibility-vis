@@ -57,15 +57,16 @@ class GraphGenerator(Neo4jClient):
 
         self._logger.info(f'Generated {len(self._edges)} edges.')
 
-        # Add nodes to graph
-        nodes_columns = ['i', 'j']
-        self.add_nodes(pd.DataFrame(self._nodes, columns=nodes_columns),
-                       *nodes_columns)
+        if not self._dry_run:
+            # Add nodes to graph
+            nodes_columns = ['i', 'j']
+            self.add_nodes(pd.DataFrame(self._nodes, columns=nodes_columns),
+                           *nodes_columns)
 
-        # Add edges to graph
-        edges_columns = ['from_i', 'from_j', 'to_i', 'to_j', 'w']
-        self.add_edges(pd.DataFrame(self._edges, columns=edges_columns),
-                       *edges_columns)
+            # Add edges to graph
+            edges_columns = ['from_i', 'from_j', 'to_i', 'to_j', 'w']
+            self.add_edges(pd.DataFrame(self._edges, columns=edges_columns),
+                           *edges_columns)
 
     def get_number_of_nodes(self):
         return len(self._nodes)
@@ -104,7 +105,7 @@ if __name__ == '__main__':
         graph_generator = GraphGenerator(credentials['neo4j']['uri'],
                                          credentials['neo4j']['user'],
                                          credentials['neo4j']['password'], 700,
-                                         700, 0.5)
+                                         700, 0.5, 1, 0.4)
         graph_generator.generate_planar_grid_graph()
         # TODO(danielle): write method to iterate nodes and get SP for all
         # print(type(graph_generator.get_single_source_shortest_paths('name', '(0, 0)')))
