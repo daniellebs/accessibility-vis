@@ -49,6 +49,21 @@ class Neo4jClient(object):
                 session.write_transaction(self._add_node, **arguments)
             session.write_transaction(self._create_index)
 
+    def load_graph_to_memory(self):
+        """Loads graph to RAM by traversing it.
+
+        This is a workaround that traverses the entire graph once, which
+        loads the graph into the memory (neo4j loads the data lazily, so we need
+        to explicitly access all nodes and relationships).
+
+        :return: None
+        """
+        with self._driver.session() as session:
+            def traverse_graph(tx):
+                query = "MATCH (n) RETURN n;"
+                tx.run(query)
+            session.write_transaction(traverse_graph)
+
     @staticmethod
     def _add_node(tx, **kwargs):
         """Adds a single node to the graph using the provided transaction.

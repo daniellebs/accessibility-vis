@@ -58,10 +58,18 @@ class GraphGenerator(Neo4jClient):
         self._logger.info(f'Generated {len(self._edges)} edges.')
 
         if not self._dry_run:
+            # # Create index constraint
+            # def index_constraint(tx):
+            #     query = "CREATE CONSTRAINT ON (n:Node) ASSERT (n.i, n.j) IS NODE KEY;"
+            #     tx.run(query)
+            #
+            # with self._driver.session() as session:
+            #     session.write_transaction(index_constraint)
+
             # Add nodes to graph
-            nodes_columns = ['i', 'j']
-            self.add_nodes(pd.DataFrame(self._nodes, columns=nodes_columns),
-                           *nodes_columns)
+            # nodes_columns = ['i', 'j']
+            # self.add_nodes(pd.DataFrame(self._nodes, columns=nodes_columns),
+            #                *nodes_columns)
 
             # Add edges to graph
             edges_columns = ['from_i', 'from_j', 'to_i', 'to_j', 'w']
@@ -79,23 +87,29 @@ class GraphGenerator(Neo4jClient):
         """Override"""
         i = kwargs['i']
         j = kwargs['j']
-        query = f"CREATE (a:Node {{name:'{str((i,j))}'}}) SET " \
+        query = f"CREATE (a:Node {{name:'{str((i, j))}'}}) SET " \
             f"a.i = {i} SET a.j = {j}"
         tx.run(query)
 
     @staticmethod
     def _create_index(tx):
+        """Override"""
         tx.run("CREATE INDEX ON :Node(i, j)")
 
     @staticmethod
     def _add_edge(tx, **kwargs):
         """Override"""
-        query = f"MATCH (a:Node),(b:Node) WHERE " \
-            f"a.i = {int(kwargs['from_i'])} AND " \
-            f"a.j = {int(kwargs['from_j'])} AND " \
-            f"b.i = {int(kwargs['to_i'])} AND " \
-            f"b.j = {int(kwargs['to_j'])} CREATE " \
-            f"(a)-[:CONNECTS {{time: {kwargs['w']}}}]->(b)"
+        # query = f"MATCH (a:Node),(b:Node) WHERE " \
+        #     f"a.i = {int(kwargs['from_i'])} AND " \
+        #     f"a.j = {int(kwargs['from_j'])} AND " \
+        #     f"b.i = {int(kwargs['to_i'])} AND " \
+        #     f"b.j = {int(kwargs['to_j'])} CREATE " \
+        #     f"(a)-[:CONNECTS {{time: {kwargs['w']}}}]->(b)"
+        query = f"MERGE (a:Node {{i: {int(kwargs['from_i'])}, " \
+            f"j: {int(kwargs['from_j'])}}}) " \
+            f"MERGE (b:Node {{i: {int(kwargs['to_i'])}, " \
+            f"j: {int(kwargs['to_j'])}}}) " \
+            f"MERGE (a)-[:CONNECTS {{time: {kwargs['w']}}}]->(b)"
         tx.run(query)
 
 
@@ -104,8 +118,8 @@ if __name__ == '__main__':
         credentials = json.load(f)
         graph_generator = GraphGenerator(credentials['neo4j']['uri'],
                                          credentials['neo4j']['user'],
-                                         credentials['neo4j']['password'], 700,
-                                         700, 0.5, 1, 0.4)
+                                         credentials['neo4j']['password'], 100,
+                                         100, 0.5, 1, 0.4)
         graph_generator.generate_planar_grid_graph()
         # TODO(danielle): write method to iterate nodes and get SP for all
         # print(type(graph_generator.get_single_source_shortest_paths('name', '(0, 0)')))
