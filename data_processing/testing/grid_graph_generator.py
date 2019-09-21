@@ -25,7 +25,8 @@ class GraphGenerator(Neo4jClient):
         return np.random.random() > self._edge_prob
 
     def weight(self):
-        return np.random.normal(self._weight_mean, self._weight_std)
+        # return np.random.normal(self._weight_mean, self._weight_std)
+        return np.random.uniform(0.0, 3.0)
 
     def generate_planar_grid_graph(self):
         # Create cartesian product
@@ -35,7 +36,7 @@ class GraphGenerator(Neo4jClient):
         self._logger.info(f'Generated {len(self._nodes)} nodes.')
         for i, j in self._nodes:
             # Can also be done by iterating from (i-1,j-1) to (i+1,j+1).
-            if i > 0 and j - 1 and self.bernoulli_trial():
+            if i > 0 and j > 0 and self.bernoulli_trial():
                 self._edges.append((i, j, i - 1, j - 1, self.weight()))
             if i > 0 and self.bernoulli_trial():
                 self._edges.append((i, j, i - 1, j, self.weight()))
@@ -123,4 +124,6 @@ if __name__ == '__main__':
         graph_generator.generate_planar_grid_graph()
         # TODO(danielle): write method to iterate nodes and get SP for all
         # print(type(graph_generator.get_single_source_shortest_paths('name', '(0, 0)')))
+        graph_generator.load_graph_to_memory()
+        graph_generator.get_single_source_shortest_paths('i', 0, 'j', 0)
         graph_generator.close()

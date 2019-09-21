@@ -111,9 +111,9 @@ class Neo4jClient(object):
         """
         raise UnimplementedException()
 
-    def get_single_source_shortest_paths(self, id_field, id_value):
+    def get_single_source_shortest_paths(self, id_field1, id_value1, id_field2, id_value2):
         def sssp(tx):
-            query = f"MATCH (n:Node {{{id_field}:'{id_value}'}}) " \
+            query = f"MATCH (n:Node {{{id_field1}:'{id_value1}', {id_field2}:'{id_value2}'}}) " \
                 f"CALL algo.shortestPath.deltaStepping.stream(n, 'time', 3.0) " \
                 f"YIELD nodeId, distance " \
                 f"RETURN algo.asNode(nodeId).name AS destination, distance"
@@ -123,7 +123,7 @@ class Neo4jClient(object):
 
         with self._driver.session() as session:
             # TODO(danielle): save results
-            return session.write_transaction(sssp)
+            return session.read_transaction(sssp)
 
 
 if __name__ == '__main__':

@@ -1,3 +1,5 @@
 .idea/*
 *.log
 *.pyc
+*.graphml
+*.graphmlz
