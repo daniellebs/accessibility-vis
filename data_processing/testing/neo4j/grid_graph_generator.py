@@ -1,8 +1,5 @@
-from contextlib import redirect_stderr
-
-from data_processing.neo4j_client import Neo4jClient, args
+from data_processing.testing.neo4j.neo4j_client import Neo4jClient, args
 import json
-import logging
 import numpy as np
 import pandas as pd
 from timeit import default_timer as timer
