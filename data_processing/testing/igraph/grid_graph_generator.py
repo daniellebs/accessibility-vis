@@ -1,11 +1,8 @@
-from contextlib import redirect_stderr
-
-# from data_processing.neo4j_client import Neo4jClient, args
-import json
-import logging
 import igraph
+from multiprocessing import Pool
 import numpy as np
-# import pandas as pd
+import pickle
+from time import time
 from timeit import default_timer as timer
 
 
@@ -26,7 +23,7 @@ class GraphGenerator:
         self._nodes_to_index = dict()
 
     def bernoulli_trial(self):
-        return np.random.random() > self._edge_prob
+        return np.random.random() < self._edge_prob
 
     def weight(self):
         # return np.random.normal(self._weight_mean, self._weight_std)
@@ -93,24 +90,15 @@ class GraphGenerator:
     def get_number_of_edges(self):
         return len(self._edges)
 
-    def get_shortest_paths(self, source):
-        start = timer()
+    def get_shortest_paths(self, sources):
+        sp = self._graph.shortest_paths_dijkstra(source=sources,
+                                                 weights='weight',
+                                                 mode=igraph.OUT)
+        filename = 'sp_' + str(sources[0]) + '-' + str(sources[-1]) + '.pkl'
+        with open(filename, 'wb') as f:
+            # store the data as binary data stream
+            pickle.dump(sp, f, pickle.HIGHEST_PROTOCOL)
 
-        sssp = self._graph.shortest_paths_dijkstra(source=source,
-                                                   weights='weight',
-                                                   mode=igraph.OUT)
-
-        end = timer()
-        tot_time = end - start
-        num_nodes = self.get_number_of_nodes()
-        num_edges = self.get_number_of_edges()
-        num_sources = len(source)
-        time_per_source_ms = (tot_time / num_sources) * 1000
-        print(
-            f'Computing SP from {num_sources} sources took {tot_time} seconds '
-            f'for a graph with {num_nodes} nodes and {num_edges} edges.'
-            f'This means {time_per_source_ms} ms per source.')
-        return sssp
 
     # TODO(danielle): fix saving and loading graph
     # def save_graph(self):
@@ -125,11 +113,45 @@ class GraphGenerator:
     #     print(igraph.summary(self._graph))
 
 
+def batches(l, n):
+    """Yield successive n-sized batches from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
+
+
 if __name__ == '__main__':
     graph_generator = GraphGenerator(500, 500, 0.5, 1, 0.4)
     graph_generator.generate_planar_grid_graph()
+
     # graph_generator.save_graph()
-    # TODO(danielle): write method to iterate nodes and get SP for all
     # graph_generator.load_graph()
-    sssp = graph_generator.get_shortest_paths(list(range(100)))
-    # print(sssp)
+    # TODO(danielle): write method to iterate nodes and get SP for all
+
+    # Single step computation
+    batch_size = 100
+    print(f'batch size: {batch_size}')
+    start = time()
+    graph_generator.get_shortest_paths(list(range(200, 300)))
+    end = time()
+    pickle_in = open("sp_test.data", "rb")
+    sp = pickle.load(pickle_in)
+    # print(sp[0][:40])
+    time_for_batch = end - start
+    print("Single step took: ", time_for_batch, ", so ",
+          time_for_batch / batch_size, " per source")
+
+    # Let's try using a pool
+    num_of_sources = 2000
+    print(f'number of sources: {num_of_sources}')
+    start = timer()
+    p = Pool()
+
+    pool_input = batches(list(range(num_of_sources)), batch_size)
+    p.map(graph_generator.get_shortest_paths, pool_input)
+
+    p.close()
+    p.join()
+    end = timer()
+    pool_tot_time = end - start
+    time_for_source = (end - start) / num_of_sources
+    print("Pool took: ", pool_tot_time, ", so ", time_for_source, " per source")

@@ -3,3 +3,6 @@
 *.pyc
 *.graphml
 *.graphmlz
+*.pkl
+*.pklz
+*.zip

@@ -113,13 +113,20 @@ class Neo4jClient(object):
 
     def get_single_source_shortest_paths(self, id_field1, id_value1, id_field2, id_value2):
         def sssp(tx):
-            query = f"MATCH (n:Node {{{id_field1}:'{id_value1}', {id_field2}:'{id_value2}'}}) " \
+            query = f"MATCH (n:Node {{{id_field1}:{id_value1}, {id_field2}:{id_value2}}}) " \
                 f"CALL algo.shortestPath.deltaStepping.stream(n, 'time', 3.0) " \
                 f"YIELD nodeId, distance " \
-                f"RETURN algo.asNode(nodeId).name AS destination, distance"
-            result = tx.run(query)
-            return pd.DataFrame([r.values() for r in result],
-                                columns=result.keys())
+                f"RETURN algo.asNode(nodeId).i, algo.asNode(nodeId).j, distance"
+            # query = f"MATCH (n:Node {{i: 0, j: 0}}) " \
+            #     f"CALL algo.shortestPath.deltaStepping.stream(n, 'time', 3.0) " \
+            #     f"YIELD nodeId, distance " \
+            #     f"RETURN algo.asNode(nodeId).i, algo.asNode(nodeId).j, distance"
+            results = tx.run(query)
+            print('Ran SSSP, getting results')
+            # print(results.peek())
+            # return pd.DataFrame([r.values() for r in result],
+            #                     columns=result.keys())
+            return results
 
         with self._driver.session() as session:
             # TODO(danielle): save results

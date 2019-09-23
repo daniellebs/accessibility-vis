@@ -5,7 +5,7 @@ import json
 import logging
 import numpy as np
 import pandas as pd
-
+from timeit import default_timer as timer
 
 class GraphGenerator(Neo4jClient):
     def __init__(self, uri, user, password, number_of_rows, number_of_columns,
@@ -56,16 +56,57 @@ class GraphGenerator(Neo4jClient):
             if j > 0:
                 self._edges.append((i, j, i, j - 1, self.weight()))
 
+        # self._nodes_to_index = {k: v for v, k in enumerate(self._nodes)}
+        #
+        # for i, j in self._nodes:
+        #     curr_index = self._nodes_to_index[(i, j)]
+        #     # Can also be done by iterating from (i-1,j-1) to (i+1,j+1).
+        #     if i > 0 and j > 0 and self.bernoulli_trial():
+        #         self._edges.append((curr_index,
+        #                             self._nodes_to_index[(i - 1, j - 1)],
+        #                             self.weight()))
+        #     if i > 0 and self.bernoulli_trial():
+        #         self._edges.append((
+        #             curr_index, self._nodes_to_index[(i - 1, j)],
+        #             self.weight()))
+        #     if i > 0 and j < self._number_of_cols - 1 \
+        #             and self.bernoulli_trial():
+        #         self._edges.append((curr_index,
+        #                             self._nodes_to_index[(i - 1, j + 1)],
+        #                             self.weight()))
+        #     if j < self._number_of_cols - 1 and self.bernoulli_trial():
+        #         self._edges.append((
+        #             curr_index, self._nodes_to_index[(i, j + 1)],
+        #             self.weight()))
+        #     if i < self._number_of_rows - 1 and j < self._number_of_cols - 1 \
+        #             and self.bernoulli_trial():
+        #         self._edges.append((curr_index,
+        #                             self._nodes_to_index[(i + 1, j + 1)],
+        #                             self.weight()))
+        #     if i < self._number_of_rows - 1 and self.bernoulli_trial():
+        #         self._edges.append((
+        #             curr_index, self._nodes_to_index[(i + 1, j)],
+        #             self.weight()))
+        #     if i < self._number_of_rows - 1 and j > 0 \
+        #             and self.bernoulli_trial():
+        #         self._edges.append((curr_index,
+        #                             self._nodes_to_index[(i + 1, j - 1)],
+        #                             self.weight()))
+        #     if j > 0:
+        #         self._edges.append((
+        #             curr_index, self._nodes_to_index[(i, j - 1)],
+        #             self.weight()))
+
         self._logger.info(f'Generated {len(self._edges)} edges.')
 
         if not self._dry_run:
-            # # Create index constraint
-            # def index_constraint(tx):
-            #     query = "CREATE CONSTRAINT ON (n:Node) ASSERT (n.i, n.j) IS NODE KEY;"
-            #     tx.run(query)
-            #
-            # with self._driver.session() as session:
-            #     session.write_transaction(index_constraint)
+            # Create index constraint
+            def index_constraint(tx):
+                query = "CREATE CONSTRAINT ON (n:Node) ASSERT (n.i, n.j) IS NODE KEY;"
+                tx.run(query)
+
+            with self._driver.session() as session:
+                session.write_transaction(index_constraint)
 
             # Add nodes to graph
             # nodes_columns = ['i', 'j']
@@ -76,6 +117,9 @@ class GraphGenerator(Neo4jClient):
             edges_columns = ['from_i', 'from_j', 'to_i', 'to_j', 'w']
             self.add_edges(pd.DataFrame(self._edges, columns=edges_columns),
                            *edges_columns)
+            # edges_columns = ['a', 'b', 'w']
+            # self.add_edges(pd.DataFrame(self._edges, columns=edges_columns),
+            #                *edges_columns)
 
     def get_number_of_nodes(self):
         return len(self._nodes)
@@ -95,7 +139,9 @@ class GraphGenerator(Neo4jClient):
     @staticmethod
     def _create_index(tx):
         """Override"""
-        tx.run("CREATE INDEX ON :Node(i, j)")
+        # tx.run("CREATE INDEX ON :Node(i, j)")
+        # tx.run("CREATE INDEX ON :Node(n)")
+        pass
 
     @staticmethod
     def _add_edge(tx, **kwargs):
@@ -106,6 +152,9 @@ class GraphGenerator(Neo4jClient):
         #     f"b.i = {int(kwargs['to_i'])} AND " \
         #     f"b.j = {int(kwargs['to_j'])} CREATE " \
         #     f"(a)-[:CONNECTS {{time: {kwargs['w']}}}]->(b)"
+        # query = f"MERGE (a:Node {{n: {int(kwargs['a'])}}}) " \
+        #     f"MERGE (b:Node {{n: {int(kwargs['b'])}}}) " \
+        #     f"MERGE (a)-[:CONNECTS {{time: {kwargs['w']}}}]->(b)"
         query = f"MERGE (a:Node {{i: {int(kwargs['from_i'])}, " \
             f"j: {int(kwargs['from_j'])}}}) " \
             f"MERGE (b:Node {{i: {int(kwargs['to_i'])}, " \
@@ -119,11 +168,16 @@ if __name__ == '__main__':
         credentials = json.load(f)
         graph_generator = GraphGenerator(credentials['neo4j']['uri'],
                                          credentials['neo4j']['user'],
-                                         credentials['neo4j']['password'], 100,
-                                         100, 0.5, 1, 0.4)
-        graph_generator.generate_planar_grid_graph()
-        # TODO(danielle): write method to iterate nodes and get SP for all
-        # print(type(graph_generator.get_single_source_shortest_paths('name', '(0, 0)')))
+                                         credentials['neo4j']['password'], 500,
+                                         500, 0.5, 1, 0.4)
+        # graph_generator.generate_planar_grid_graph()
+        print('loading graph to memory')
         graph_generator.load_graph_to_memory()
-        graph_generator.get_single_source_shortest_paths('i', 0, 'j', 0)
+        print('getting SSSP')
+        start = timer()
+        sssp = graph_generator.get_single_source_shortest_paths('i', 0, 'j', 0)
+        # print(sssp)
+        # pd.to_pickle(sssp, 'sssp_test.pkl')
+        end = timer()
+        print(f'Took {(end - start)*1000} ms to compute SSSP')
         graph_generator.close()
