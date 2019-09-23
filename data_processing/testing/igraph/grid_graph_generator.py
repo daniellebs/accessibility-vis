@@ -8,14 +8,13 @@ from timeit import default_timer as timer
 
 class GraphGenerator:
     def __init__(self, number_of_rows, number_of_columns,
-                 edge_probability=0.5, weight_mean=1, weight_std=0.2,
+                 edge_probability=0.5, weight_low=0, weight_high=3,
                  dry_run=False):
-
         self._number_of_rows = number_of_rows
         self._number_of_cols = number_of_columns
         self._edge_prob = edge_probability
-        self._weight_mean = weight_mean
-        self._weight_std = weight_std
+        self._weight_low = weight_low
+        self._weight_high = weight_high
         self._nodes = []
         self._edges = []
         self._dry_run = dry_run
@@ -26,8 +25,7 @@ class GraphGenerator:
         return np.random.random() < self._edge_prob
 
     def weight(self):
-        # return np.random.normal(self._weight_mean, self._weight_std)
-        return np.random.uniform(0.0, 3.0)
+        return np.random.uniform(self._weight_low, self._weight_high)
 
     def generate_planar_grid_graph(self):
         # Create cartesian product
@@ -99,7 +97,6 @@ class GraphGenerator:
             # store the data as binary data stream
             pickle.dump(sp, f, pickle.HIGHEST_PROTOCOL)
 
-
     # TODO(danielle): fix saving and loading graph
     # def save_graph(self):
     #     f = 'output/grid_graph.graphml'
@@ -120,7 +117,9 @@ def batches(l, n):
 
 
 if __name__ == '__main__':
-    graph_generator = GraphGenerator(500, 500, 0.5, 1, 0.4)
+    graph_generator = GraphGenerator(number_of_rows=500, number_of_columns=500,
+                                     edge_probability=0.5, weight_low=0,
+                                     weight_high=3)
     graph_generator.generate_planar_grid_graph()
 
     # graph_generator.save_graph()
@@ -135,7 +134,6 @@ if __name__ == '__main__':
     end = time()
     pickle_in = open("sp_test.data", "rb")
     sp = pickle.load(pickle_in)
-    # print(sp[0][:40])
     time_for_batch = end - start
     print("Single step took: ", time_for_batch, ", so ",
           time_for_batch / batch_size, " per source")
