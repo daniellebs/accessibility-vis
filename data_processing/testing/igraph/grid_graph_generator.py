@@ -88,14 +88,15 @@ class GraphGenerator:
     def get_number_of_edges(self):
         return len(self._edges)
 
-    def get_shortest_paths(self, sources):
+    def get_shortest_paths(self, sources, save_to_files=False):
         sp = self._graph.shortest_paths_dijkstra(source=sources,
                                                  weights='weight',
                                                  mode=igraph.OUT)
-        filename = 'sp_' + str(sources[0]) + '-' + str(sources[-1]) + '.pkl'
-        with open(filename, 'wb') as f:
-            # store the data as binary data stream
-            pickle.dump(sp, f, pickle.HIGHEST_PROTOCOL)
+        # if save_to_files:
+        #     filename = 'sp_' + str(sources[0]) + '-' + str(sources[-1]) + '.pkl'
+        #     with open(filename, 'wb') as f:
+        #         # store the data as binary data stream
+        #         pickle.dump(sp, f, pickle.HIGHEST_PROTOCOL)
 
     # TODO(danielle): fix saving and loading graph
     # def save_graph(self):
@@ -118,9 +119,11 @@ def batches(l, n):
 
 if __name__ == '__main__':
     graph_generator = GraphGenerator(number_of_rows=500, number_of_columns=500,
-                                     edge_probability=0.5, weight_low=0,
-                                     weight_high=3)
+                                     edge_probability=0.7, weight_low=0,
+                                     weight_high=4)
     graph_generator.generate_planar_grid_graph()
+
+    parallelize = True
 
     # graph_generator.save_graph()
     # graph_generator.load_graph()
@@ -132,8 +135,8 @@ if __name__ == '__main__':
     start = time()
     graph_generator.get_shortest_paths(list(range(200, 300)))
     end = time()
-    pickle_in = open("sp_test.data", "rb")
-    sp = pickle.load(pickle_in)
+    # pickle_in = open("sp_test.data", "rb")
+    # sp = pickle.load(pickle_in)
     time_for_batch = end - start
     print("Single step took: ", time_for_batch, ", so ",
           time_for_batch / batch_size, " per source")

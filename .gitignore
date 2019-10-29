@@ -6,3 +6,9 @@
 *.pkl
 *.pklz
 *.zip
+*-checkpoint.ipynb
+*.csv
+*.txt
+*.xlsx
+*.png
+data_processing/notebooks/Untitled.ipynb
