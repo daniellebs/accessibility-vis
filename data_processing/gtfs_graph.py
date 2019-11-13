@@ -96,9 +96,11 @@ if __name__ == '__main__':
 
     with open(START_NODES_PATH, 'rb') as f:
         nodes = pickle.load(f)
+        graph_nodes = set(gtfs_graph.get_nodes())
+        nodes = [n for n in nodes if n in graph_nodes]
 
     num_of_sources = len(nodes)
-    batch_size = 50
+    batch_size = 100
     pool_input = batches(nodes, batch_size)
 
     start = timer()
