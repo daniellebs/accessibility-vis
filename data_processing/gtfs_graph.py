@@ -40,12 +40,13 @@ class GtfsGraph:
     def get_nodes(self):
         return self._nodes
 
-    def get_shortest_paths(self, sources, save_to_files=True, debug=False, target=None):
+    def get_shortest_paths(self, sources, save_to_files=True, debug=False, target=None, reversed=False):
         if not debug:
+            mode = igraph.IN if reversed else igraph.OUT
             sp = self._graph.shortest_paths_dijkstra(source=sources,
                                                      target=self._nodes,
                                                      weights='weight',
-                                                     mode=igraph.OUT)
+                                                     mode=mode)
 
             max_len_sec = 3600  # 1 hour
             reachable = {'source': [], 'target': [], 'time_sec': []}
@@ -64,10 +65,6 @@ class GtfsGraph:
             reachable_df = pd.DataFrame.from_dict(reachable)
             del reachable  # Delete reachable dict from memory
 
-            # print("======== Reachable DataFrame ========")
-            # print(reachable_df.head(3))
-            # print("=====================================")
-
             reachable_df = reachable_df.merge(
                 self._nodes_df, left_on='target', right_on='node_id').drop(['target', 'node_id', 'departure'], axis=1)
             reachable_df = reachable_df.merge(
@@ -75,11 +72,11 @@ class GtfsGraph:
             reachable_df = reachable_df.sort_values('time_sec').groupby(['stop_id_source','stop_id_target'], as_index=False).first()
 
             if save_to_files:
-                filename = '../output_data/sp/sp_' + str(
+                paths_type = 'sa' if reversed else 'aa'  # Service Area or Access Area
+                filename = '../output_data/sp/' + paths_type + '_' + str(
                     sources[0]) + '-' + str(
                     sources[-1]) + '.pkl'
                 reachable_df.to_pickle(filename)
-
 
         if debug:
             print(f'Trying to get a shortest path from {sources} to {target}')
@@ -115,8 +112,12 @@ if __name__ == '__main__':
 
     with open(START_NODES_PATH, 'rb') as f:
         nodes = pickle.load(f)
+        print(nodes)
         graph_nodes = set(gtfs_graph.get_nodes())
+        print("****************")
+        print(graph_nodes)
         nodes = [n for n in nodes if n in graph_nodes]
+        print(nodes[:2])
 
     num_of_sources = len(nodes)
     batch_size = 100
