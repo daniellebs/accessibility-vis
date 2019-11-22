@@ -12,11 +12,15 @@ import pyarrow
 
 
 class GtfsGraph:
-    def __init__(self, direct_edges, transfer_edges={}, reversed_graph=False):
+    def __init__(self, direct_edges, transfer_edges={}, nodes_df=None, reversed_graph=False):
         self._edges = [(str(u), str(v), w) for u,v, w in direct_edges.union(transfer_edges)]
         nodes = [(s, d) for s, d, _ in self._edges]
         self._nodes = list(set([item for sublist in nodes for item in sublist]))
         self._graph = igraph.Graph()
+        self._nodes_df = nodes_df
+        print("========== Nodes DataFrame ==========")
+        print(self._nodes_df.head(3))
+        print("=====================================")
 
     def construct_graph(self):
         s = timer()
@@ -57,11 +61,24 @@ class GtfsGraph:
                         reachable['target'].append(int(self._nodes[target_i]))
                         reachable['time_sec'].append(d)
 
+            reachable_df = pd.DataFrame.from_dict(reachable)
+            del reachable  # Delete reachable dict from memory
+
+            # print("======== Reachable DataFrame ========")
+            # print(reachable_df.head(3))
+            # print("=====================================")
+
+            reachable_df = reachable_df.merge(
+                self._nodes_df, left_on='target', right_on='node_id').drop(['target', 'node_id', 'departure'], axis=1)
+            reachable_df = reachable_df.merge(
+                self._nodes_df, left_on='source', right_on='node_id', suffixes=('_target', '_source')).drop(['source', 'node_id', 'arrival_source'], axis=1)
+            reachable_df = reachable_df.sort_values('time_sec').groupby(['stop_id_source','stop_id_target'], as_index=False).first()
+
             if save_to_files:
                 filename = '../output_data/sp/sp_' + str(
                     sources[0]) + '-' + str(
                     sources[-1]) + '.pkl'
-                pd.DataFrame.from_dict(reachable).to_pickle(filename)
+                reachable_df.to_pickle(filename)
 
 
         if debug:
@@ -81,6 +98,7 @@ def batches(l, n):
 
 
 START_NODES_PATH = '../output_data/morning_start_nodes.pkl'
+ALL_NODES_PATH = '../output_data/morning_nodes.pkl'
 DIRECT_EDGES_PATH = '../output_data/morning_direct_edges.pkl'
 # DIRECT_EDGES_PATH = '../output_data/single_trip_direct_edges.pkl'
 TRANSFER_EDGES_PATH = '../output_data/morning_transfer_edges.pkl'
@@ -88,9 +106,10 @@ DEBUG = False
 
 if __name__ == '__main__':
     direct_edges = pd.read_pickle(DIRECT_EDGES_PATH)
-    fake_direct_edges = {(1,2,4), (2,3,2), (3,8,2), (8,6,1)}
     transfer_edges = pd.read_pickle(TRANSFER_EDGES_PATH)
-    gtfs_graph = GtfsGraph(direct_edges, transfer_edges)
+    all_nodes_df = pd.read_pickle(ALL_NODES_PATH)[
+        ['node_id', 'stop_id', 'stop_lon', 'stop_lat', 'departure', 'arrival']]
+    gtfs_graph = GtfsGraph(direct_edges, transfer_edges, all_nodes_df)
     gtfs_graph.construct_graph()
     print('Finished constructing the graph')
 
