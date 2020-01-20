@@ -23,3 +23,8 @@ output_data/stop_nbh_1000.txt
 *Test3*
 *Test4*
 *Test0_a*
+
+
+# But not these files...
+!output_data/validation/two_lines/*
+
