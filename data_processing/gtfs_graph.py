@@ -9,6 +9,7 @@ from timeit import default_timer as timer
 import datetime as dt
 import tqdm
 import pyarrow
+from time import sleep
 
 
 class GtfsGraph:
@@ -18,9 +19,9 @@ class GtfsGraph:
         self._nodes = list(set([item for sublist in nodes for item in sublist]))
         self._graph = igraph.Graph()
         self._nodes_df = nodes_df
-        print("========== Nodes DataFrame ==========")
         print(self._nodes_df.head(3))
         print("=====================================")
+        self._reversed = reversed_graph
 
     def construct_graph(self):
         s = timer()
@@ -40,9 +41,9 @@ class GtfsGraph:
     def get_nodes(self):
         return self._nodes
 
-    def get_shortest_paths(self, sources, save_to_files=True, debug=False, target=None, reversed=False):
+    def get_shortest_paths(self, sources, save_to_files=True, debug=False, target=None):
         if not debug:
-            mode = igraph.IN if reversed else igraph.OUT
+            mode = igraph.IN if self._reversed else igraph.OUT
             sp = self._graph.shortest_paths_dijkstra(source=sources,
                                                      target=self._nodes,
                                                      weights='weight',
@@ -72,8 +73,8 @@ class GtfsGraph:
             reachable_df = reachable_df.sort_values('time_sec').groupby(['stop_id_source','stop_id_target'], as_index=False).first()
 
             if save_to_files:
-                paths_type = 'sa' if reversed else 'aa'  # Service Area or Access Area
-                filename = '../output_data/sp/' + paths_type + '_' + str(
+                paths_type = 'sa' if self._reversed else 'aa'  # Service Area or Access Area
+                filename = OUTPUT_PATH + paths_type + '_' + str(
                     sources[0]) + '-' + str(
                     sources[-1]) + '.pkl'
                 reachable_df.to_pickle(filename)
@@ -94,33 +95,44 @@ def batches(l, n):
         yield l[i:i + n]
 
 
-START_NODES_PATH = '../output_data/morning_start_nodes.pkl'
-ALL_NODES_PATH = '../output_data/morning_nodes.pkl'
-DIRECT_EDGES_PATH = '../output_data/morning_direct_edges.pkl'
+VALIDATION = True
+V_PATH = 'validation/test1/' if VALIDATION else ''
+
+START_NODES_PATH = '../output_data/' + V_PATH + 'morning_start_nodes.pkl'
+TARGET_NODES_PATH = '../output_data/' + V_PATH + 'target_nodes.pkl'
+ALL_NODES_PATH = '../output_data/' + V_PATH + 'morning_nodes.pkl'
+DIRECT_EDGES_PATH = '../output_data/' + V_PATH + 'morning_direct_edges.pkl'
 # DIRECT_EDGES_PATH = '../output_data/single_trip_direct_edges.pkl'
-TRANSFER_EDGES_PATH = '../output_data/morning_transfer_edges.pkl'
+TRANSFER_EDGES_PATH = '../output_data/' + V_PATH + 'morning_transfer_edges.pkl'
+OUTPUT_PATH = '../output_data/' + V_PATH
 DEBUG = False
 
 if __name__ == '__main__':
+    service = False
     direct_edges = pd.read_pickle(DIRECT_EDGES_PATH)
     transfer_edges = pd.read_pickle(TRANSFER_EDGES_PATH)
     all_nodes_df = pd.read_pickle(ALL_NODES_PATH)[
         ['node_id', 'stop_id', 'stop_lon', 'stop_lat', 'departure', 'arrival']]
-    gtfs_graph = GtfsGraph(direct_edges, transfer_edges, all_nodes_df)
+    gtfs_graph = GtfsGraph(direct_edges, transfer_edges, all_nodes_df,
+                           reversed_graph=service)
     gtfs_graph.construct_graph()
     print('Finished constructing the graph')
 
-    with open(START_NODES_PATH, 'rb') as f:
-        nodes = pickle.load(f)
-        print(nodes)
-        graph_nodes = set(gtfs_graph.get_nodes())
-        print("****************")
-        print(graph_nodes)
-        nodes = [n for n in nodes if n in graph_nodes]
-        print(nodes[:2])
+    # nodes = []
+    if service:
+        with open(TARGET_NODES_PATH, 'rb') as f:
+            nodes = pickle.load(f)
+            graph_nodes = set(gtfs_graph.get_nodes())
+            nodes = [n for n in nodes if n in graph_nodes]
+            sleep(2)
+    else:
+        with open(START_NODES_PATH, 'rb') as f:
+            nodes = pickle.load(f)
+            graph_nodes = set(gtfs_graph.get_nodes())
+            nodes = [n for n in nodes if n in graph_nodes]
 
     num_of_sources = len(nodes)
-    batch_size = 100
+    batch_size = 200
     pool_input = batches(nodes, batch_size)
 
     start = timer()
@@ -131,4 +143,4 @@ if __name__ == '__main__':
     end = timer()
     pool_tot_time = end - start
     time_for_source = (end - start) / num_of_sources
-    print("Pool took: ", pool_tot_time, ", so ", time_for_source, " per source")
+    print("Pool took: ", pool_tot_time, " seconds, so ", time_for_source, " per source")
