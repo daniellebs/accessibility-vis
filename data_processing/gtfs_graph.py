@@ -19,8 +19,6 @@ class GtfsGraph:
         self._nodes = list(set([item for sublist in nodes for item in sublist]))
         self._graph = igraph.Graph()
         self._nodes_df = nodes_df
-        print(self._nodes_df.head(3))
-        print("=====================================")
         self._reversed = reversed_graph
 
     def construct_graph(self):
