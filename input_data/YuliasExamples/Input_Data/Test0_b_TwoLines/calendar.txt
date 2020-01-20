@@ -1,0 +1,3 @@
+service_id,sunday,monday,tuesday,wednesday,thursday,friday,saturday,start_date,end_date
+31360372,1,1,1,1,1,1,1,20150101,20161231
+31349568,1,1,1,1,1,1,1,20150101,20161231
