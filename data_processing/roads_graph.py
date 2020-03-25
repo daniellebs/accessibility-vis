@@ -1,14 +1,11 @@
 import igraph
 from multiprocessing import Pool
-import numpy as np
 import pickle
 import pandas as pd
 from time import time
 import os
 from timeit import default_timer as timer
 import datetime as dt
-import tqdm
-import pyarrow
 from time import sleep
 
 
@@ -93,8 +90,10 @@ def batches(l, n):
         yield l[i:i + n]
 
 
-VALIDATION = True
-V_PATH = 'validation/test1/' if VALIDATION else ''
+SERVICE = False
+S_PATH = 'sa' if SERVICE else ''
+VALIDATION = False
+V_PATH = 'validation/roads_network/' if VALIDATION else ''
 
 START_NODES_PATH = '../output_data/' + V_PATH + 'morning_start_nodes.pkl'
 TARGET_NODES_PATH = '../output_data/' + V_PATH + 'target_nodes.pkl'
@@ -102,11 +101,10 @@ ALL_NODES_PATH = '../output_data/' + V_PATH + 'morning_nodes.pkl'
 DIRECT_EDGES_PATH = '../output_data/' + V_PATH + 'morning_direct_edges.pkl'
 # DIRECT_EDGES_PATH = '../output_data/single_trip_direct_edges.pkl'
 TRANSFER_EDGES_PATH = '../output_data/' + V_PATH + 'morning_transfer_edges.pkl'
-OUTPUT_PATH = '../output_data/' + V_PATH
+OUTPUT_PATH = '../output_data/' + V_PATH + 'roads/' + S_PATH
 DEBUG = False
 
 if __name__ == '__main__':
-    service = False
     direct_edges = pd.read_pickle(DIRECT_EDGES_PATH)
     transfer_edges = pd.read_pickle(TRANSFER_EDGES_PATH)
     all_nodes_df = pd.read_pickle(ALL_NODES_PATH)[
@@ -117,7 +115,7 @@ if __name__ == '__main__':
     print('Finished constructing the graph')
 
     # nodes = []
-    if service:
+    if SERVICE:
         with open(TARGET_NODES_PATH, 'rb') as f:
             nodes = pickle.load(f)
             graph_nodes = set(gtfs_graph.get_nodes())
