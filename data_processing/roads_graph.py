@@ -1,21 +1,16 @@
-import igraph
 from multiprocessing import Pool
-import pickle
-import pandas as pd
-from time import time
-import os
 from timeit import default_timer as timer
-import datetime as dt
-from time import sleep
+
+import igraph
+import pandas as pd
 
 
-class GtfsGraph:
-    def __init__(self, direct_edges, transfer_edges={}, nodes_df=None, reversed_graph=False):
-        self._edges = [(str(u), str(v), w) for u,v, w in direct_edges.union(transfer_edges)]
+class RoadsGraph:
+    def __init__(self, edges, reversed_graph=False):
+        self._edges = [(str(u), str(v), w) for u, v, w in edges]
         nodes = [(s, d) for s, d, _ in self._edges]
         self._nodes = list(set([item for sublist in nodes for item in sublist]))
         self._graph = igraph.Graph()
-        self._nodes_df = nodes_df
         self._reversed = reversed_graph
 
     def construct_graph(self):
@@ -36,7 +31,8 @@ class GtfsGraph:
     def get_nodes(self):
         return self._nodes
 
-    def get_shortest_paths(self, sources, save_to_files=True, debug=False, target=None):
+    def get_shortest_paths(self, sources, save_to_files=True, debug=False,
+                           target=None):
         if not debug:
             mode = igraph.IN if self._reversed else igraph.OUT
             sp = self._graph.shortest_paths_dijkstra(source=sources,
@@ -61,12 +57,6 @@ class GtfsGraph:
             reachable_df = pd.DataFrame.from_dict(reachable)
             del reachable  # Delete reachable dict from memory
 
-            reachable_df = reachable_df.merge(
-                self._nodes_df, left_on='target', right_on='node_id').drop(['target', 'node_id', 'departure'], axis=1)
-            reachable_df = reachable_df.merge(
-                self._nodes_df, left_on='source', right_on='node_id', suffixes=('_target', '_source')).drop(['source', 'node_id', 'arrival_source'], axis=1)
-            reachable_df = reachable_df.sort_values('time_sec').groupby(['stop_id_source','stop_id_target'], as_index=False).first()
-
             if save_to_files:
                 paths_type = 'sa' if self._reversed else 'aa'  # Service Area or Access Area
                 filename = OUTPUT_PATH + paths_type + '_' + str(
@@ -78,8 +68,8 @@ class GtfsGraph:
             print(f'Trying to get a shortest path from {sources} to {target}')
             assert target is not None, 'In debug mode the target must be set'
             sp = self._graph.get_shortest_path_dijkstra(sources, to=target,
-                                                weights='weight',
-                                                mode=igraph.OUT)
+                                                        weights='weight',
+                                                        mode=igraph.OUT)
             print('======================')
             print(f'Path to node {sp[-1]} is {sp}')
 
@@ -97,46 +87,28 @@ V_PATH = 'validation/roads_network/' if VALIDATION else ''
 
 START_NODES_PATH = '../output_data/' + V_PATH + 'morning_start_nodes.pkl'
 TARGET_NODES_PATH = '../output_data/' + V_PATH + 'target_nodes.pkl'
-ALL_NODES_PATH = '../output_data/' + V_PATH + 'morning_nodes.pkl'
-DIRECT_EDGES_PATH = '../output_data/' + V_PATH + 'morning_direct_edges.pkl'
-# DIRECT_EDGES_PATH = '../output_data/single_trip_direct_edges.pkl'
-TRANSFER_EDGES_PATH = '../output_data/' + V_PATH + 'morning_transfer_edges.pkl'
+EDGES_PATH = '../output_data/' + V_PATH + 'roads_graph_weighted_edges.pkl'
 OUTPUT_PATH = '../output_data/' + V_PATH + 'roads/' + S_PATH
 DEBUG = False
 
 if __name__ == '__main__':
-    direct_edges = pd.read_pickle(DIRECT_EDGES_PATH)
-    transfer_edges = pd.read_pickle(TRANSFER_EDGES_PATH)
-    all_nodes_df = pd.read_pickle(ALL_NODES_PATH)[
-        ['node_id', 'stop_id', 'stop_lon', 'stop_lat', 'departure', 'arrival']]
-    gtfs_graph = (direct_edges, transfer_edges, all_nodes_df,
-                  reversed_graph=service)
-    gtfs_graph.construct_graph()
+    edges = pd.read_pickle(EDGES_PATH)
+    roads_graph = (edges, SERVICE)
+    roads_graph.construct_graph()
     print('Finished constructing the graph')
 
-    # nodes = []
-    if SERVICE:
-        with open(TARGET_NODES_PATH, 'rb') as f:
-            nodes = pickle.load(f)
-            graph_nodes = set(gtfs_graph.get_nodes())
-            nodes = [n for n in nodes if n in graph_nodes]
-            sleep(2)
-    else:
-        with open(START_NODES_PATH, 'rb') as f:
-            nodes = pickle.load(f)
-            graph_nodes = set(gtfs_graph.get_nodes())
-            nodes = [n for n in nodes if n in graph_nodes]
-
+    nodes = roads_graph.get_nodes()
     num_of_sources = len(nodes)
     batch_size = 200
     pool_input = batches(nodes, batch_size)
 
     start = timer()
     p = Pool()
-    p.map(gtfs_graph.get_shortest_paths, pool_input)
+    p.map(roads_graph.get_shortest_paths, pool_input)
     p.close()
     p.join()
     end = timer()
     pool_tot_time = end - start
     time_for_source = (end - start) / num_of_sources
-    print("Pool took: ", pool_tot_time, " seconds, so ", time_for_source, " per source")
+    print("Pool took: ", pool_tot_time, " seconds, so ", time_for_source,
+          " per source")

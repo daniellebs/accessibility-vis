@@ -1,14 +1,8 @@
 import igraph
 from multiprocessing import Pool
-import numpy as np
 import pickle
 import pandas as pd
-from time import time
-import os
 from timeit import default_timer as timer
-import datetime as dt
-import tqdm
-import pyarrow
 from time import sleep
 
 
