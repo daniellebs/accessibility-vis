@@ -13,6 +13,7 @@ For general background and details on the graphs structure please see [this docu
   
 ### data_processing  
 Computing travel times and general accessibility.  
+**NOTE: For further details on how to actually use this code to run computations, please see the README under the data_processing directory**
 #### Files
 ##### gtfs_graph.py
 The main code which computes the shortest paths between public transit stops. 
