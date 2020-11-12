@@ -121,7 +121,6 @@ def batches(l, n):
         yield l[i:i + n]
 
 
-SERVICE = False
 TEST = False
 T_PATH = 'test/haifa_krayot/' if TEST else ''
 USE_START_NODES = True
@@ -134,6 +133,9 @@ OUTPUT_PATH = '../output_data/roads/' + T_PATH
 DEBUG = False
 
 MAX_TIME_SEC = 45 * MINUTE
+
+# Should we compute for a service ares instead of access area?
+SERVICE = False
 
 if __name__ == '__main__':
     edges = pd.read_pickle(EDGES_PATH)
