@@ -33,7 +33,8 @@ class GtfsGraph:
     def get_nodes(self):
         return self._nodes
 
-    def get_shortest_paths(self, sources, save_to_files=True, debug=False, target=None):
+    def get_shortest_paths(self, sources, save_to_files=True, debug=False,
+                           target=None):
         if not debug:
             mode = igraph.IN if self._reversed else igraph.OUT
             sp = self._graph.shortest_paths_dijkstra(source=sources,
@@ -55,7 +56,7 @@ class GtfsGraph:
                         reachable['target'].append(int(self._nodes[target_i]))
                         reachable['time_sec'].append(d)
 
-            reachable_df = pd.DataFrame.from_dict(reachable)
+            reachable_df = pd.DataFrame.fr om_dict(reachable)
             del reachable  # Delete reachable dict from memory
 
             reachable_df = reachable_df.merge(
