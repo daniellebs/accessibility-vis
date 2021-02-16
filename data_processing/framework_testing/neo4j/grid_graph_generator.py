@@ -1,4 +1,4 @@
-from data_processing.testing.neo4j.neo4j_client import Neo4jClient, args
+from data_processing.framework_testing.neo4j.neo4j_client import Neo4jClient, args
 import json
 import numpy as np
 import pandas as pd
