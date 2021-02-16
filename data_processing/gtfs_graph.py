@@ -4,16 +4,39 @@ import pickle
 import pandas as pd
 from timeit import default_timer as timer
 from time import sleep
+import argparse
+
+# Command line flags
+parser = argparse.ArgumentParser()
+# TODO: Add flags here
+args = parser.parse_args()
+
 
 
 class GtfsGraph:
     def __init__(self, direct_edges, transfer_edges={}, nodes_df=None, reversed_graph=False):
-        self._edges = [(str(u), str(v), w) for u,v, w in direct_edges.union(transfer_edges)]
-        nodes = [(s, d) for s, d, _ in self._edges]
-        self._nodes = list(set([item for sublist in nodes for item in sublist]))
+        self._edges = self.construct_edges(direct_edges, transfer_edges)
+        self._nodes = self.construct_nodes()
         self._graph = igraph.Graph()
         self._nodes_df = nodes_df
         self._reversed = reversed_graph
+
+    def construct_edges(self, direct_edges, transfer_edges={}):
+        self._edges = [(str(u), str(v), w) for u, v, w in
+                       direct_edges.union(transfer_edges)]
+
+    def construct_nodes(self):
+        # TODO: Make this function construct the actual nodes from the raw data.
+
+        # For now, nodes are created based on all edges, so the graph edges
+        # should be initialized first.
+        if self._edges is not None:
+            raise Exception("Graph edges must be initialized before calling "
+                            "construct_nodes")
+
+        nodes = [(s, d) for s, d, _ in self._edges]
+        self._nodes = list(set([item for sublist in nodes for item in sublist]))
+
 
     def construct_graph(self):
         s = timer()
@@ -114,7 +137,7 @@ if __name__ == '__main__':
     print('Finished constructing the graph')
 
     # nodes = []
-    if service:
+    if SERVICE:
         with open(TARGET_NODES_PATH, 'rb') as f:
             nodes = pickle.load(f)
             graph_nodes = set(gtfs_graph.get_nodes())
