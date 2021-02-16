@@ -12,31 +12,31 @@ parser = argparse.ArgumentParser()
 args = parser.parse_args()
 
 
-
 class GtfsGraph:
-    def __init__(self, direct_edges, transfer_edges={}, nodes_df=None, reversed_graph=False):
+    def __init__(self, direct_edges, transfer_edges={}, nodes_df=None,
+                 reversed_graph=False):
         self._edges = self.construct_edges(direct_edges, transfer_edges)
         self._nodes = self.construct_nodes()
         self._graph = igraph.Graph()
         self._nodes_df = nodes_df
         self._reversed = reversed_graph
 
+    @staticmethod
     def construct_edges(self, direct_edges, transfer_edges={}):
-        self._edges = [(str(u), str(v), w) for u, v, w in
-                       direct_edges.union(transfer_edges)]
+        return [(str(u), str(v), w) for u, v, w in
+                set(direct_edges).union(set(transfer_edges))]
 
     def construct_nodes(self):
         # TODO: Make this function construct the actual nodes from the raw data.
 
         # For now, nodes are created based on all edges, so the graph edges
         # should be initialized first.
-        if self._edges is not None:
+        if self._edges is None:
             raise Exception("Graph edges must be initialized before calling "
                             "construct_nodes")
 
         nodes = [(s, d) for s, d, _ in self._edges]
-        self._nodes = list(set([item for sublist in nodes for item in sublist]))
-
+        return list(set([item for sublist in nodes for item in sublist]))
 
     def construct_graph(self):
         s = timer()
@@ -79,14 +79,18 @@ class GtfsGraph:
                         reachable['target'].append(int(self._nodes[target_i]))
                         reachable['time_sec'].append(d)
 
-            reachable_df = pd.DataFrame.fr om_dict(reachable)
+            reachable_df = pd.DataFrame.from_dict(reachable)
             del reachable  # Delete reachable dict from memory
 
             reachable_df = reachable_df.merge(
-                self._nodes_df, left_on='target', right_on='node_id').drop(['target', 'node_id', 'departure'], axis=1)
+                self._nodes_df, left_on='target', right_on='node_id').drop(
+                ['target', 'node_id', 'departure'], axis=1)
             reachable_df = reachable_df.merge(
-                self._nodes_df, left_on='source', right_on='node_id', suffixes=('_target', '_source')).drop(['source', 'node_id', 'arrival_source'], axis=1)
-            reachable_df = reachable_df.sort_values('time_sec').groupby(['stop_id_source','stop_id_target'], as_index=False).first()
+                self._nodes_df, left_on='source', right_on='node_id',
+                suffixes=('_target', '_source')).drop(
+                ['source', 'node_id', 'arrival_source'], axis=1)
+            reachable_df = reachable_df.sort_values('time_sec').groupby(
+                ['stop_id_source', 'stop_id_target'], as_index=False).first()
 
             if save_to_files:
                 paths_type = 'sa' if self._reversed else 'aa'  # Service Area or Access Area
@@ -99,8 +103,8 @@ class GtfsGraph:
             print(f'Trying to get a shortest path from {sources} to {target}')
             assert target is not None, 'In debug mode the target must be set'
             sp = self._graph.get_shortest_path_dijkstra(sources, to=target,
-                                                weights='weight',
-                                                mode=igraph.OUT)
+                                                        weights='weight',
+                                                        mode=igraph.OUT)
             print('======================')
             print(f'Path to node {sp[-1]} is {sp}')
 
@@ -111,7 +115,7 @@ def batches(l, n):
         yield l[i:i + n]
 
 
-VALIDATION = False
+VALIDATION = True
 V_PATH = 'validation/test1/' if VALIDATION else ''
 
 START_NODES_PATH = '../output_data/' + V_PATH + 'morning_start_nodes.pkl'
@@ -131,8 +135,8 @@ if __name__ == '__main__':
     transfer_edges = pd.read_pickle(TRANSFER_EDGES_PATH)
     all_nodes_df = pd.read_pickle(ALL_NODES_PATH)[
         ['node_id', 'stop_id', 'stop_lon', 'stop_lat', 'departure', 'arrival']]
-    gtfs_graph = (direct_edges, transfer_edges, all_nodes_df,
-                  reversed_graph=SERVICE)
+    gtfs_graph = GtfsGraph(direct_edges, transfer_edges, all_nodes_df,
+                           reversed_graph=SERVICE)
     gtfs_graph.construct_graph()
     print('Finished constructing the graph')
 
@@ -161,4 +165,5 @@ if __name__ == '__main__':
     end = timer()
     pool_tot_time = end - start
     time_for_source = (end - start) / num_of_sources
-    print("Pool took: ", pool_tot_time, " seconds, so ", time_for_source, " per source")
+    print("Pool took: ", pool_tot_time, " seconds, so ", time_for_source,
+          " per source")
