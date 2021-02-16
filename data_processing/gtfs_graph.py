@@ -33,7 +33,8 @@ class GtfsGraph:
     def get_nodes(self):
         return self._nodes
 
-    def get_shortest_paths(self, sources, save_to_files=True, debug=False, target=None):
+    def get_shortest_paths(self, sources, save_to_files=True, debug=False,
+                           target=None):
         if not debug:
             mode = igraph.IN if self._reversed else igraph.OUT
             sp = self._graph.shortest_paths_dijkstra(source=sources,
@@ -55,7 +56,7 @@ class GtfsGraph:
                         reachable['target'].append(int(self._nodes[target_i]))
                         reachable['time_sec'].append(d)
 
-            reachable_df = pd.DataFrame.from_dict(reachable)
+            reachable_df = pd.DataFrame.fr om_dict(reachable)
             del reachable  # Delete reachable dict from memory
 
             reachable_df = reachable_df.merge(
@@ -87,7 +88,7 @@ def batches(l, n):
         yield l[i:i + n]
 
 
-VALIDATION = True
+VALIDATION = False
 V_PATH = 'validation/test1/' if VALIDATION else ''
 
 START_NODES_PATH = '../output_data/' + V_PATH + 'morning_start_nodes.pkl'
@@ -99,14 +100,16 @@ TRANSFER_EDGES_PATH = '../output_data/' + V_PATH + 'morning_transfer_edges.pkl'
 OUTPUT_PATH = '../output_data/' + V_PATH
 DEBUG = False
 
+# Should we compute for a service ares instead of access area?
+SERVICE = False
+
 if __name__ == '__main__':
-    service = False
     direct_edges = pd.read_pickle(DIRECT_EDGES_PATH)
     transfer_edges = pd.read_pickle(TRANSFER_EDGES_PATH)
     all_nodes_df = pd.read_pickle(ALL_NODES_PATH)[
         ['node_id', 'stop_id', 'stop_lon', 'stop_lat', 'departure', 'arrival']]
     gtfs_graph = (direct_edges, transfer_edges, all_nodes_df,
-                  reversed_graph=service)
+                  reversed_graph=SERVICE)
     gtfs_graph.construct_graph()
     print('Finished constructing the graph')
 
