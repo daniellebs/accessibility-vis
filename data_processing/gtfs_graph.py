@@ -2,6 +2,7 @@ import igraph
 from multiprocessing import Pool
 import pickle
 import pandas as pd
+import numpy as np
 from timeit import default_timer as timer
 from time import sleep
 import argparse
@@ -20,6 +21,46 @@ class GtfsGraph:
         self._graph = igraph.Graph()
         self._nodes_df = nodes_df
         self._reversed = reversed_graph
+        self._direct_edges = set()
+
+    def create_direct_edges(self, raw_nodes_df):
+        # Sanity check: verify that the stops in each trip are consecutive
+        def verify_consecutive(l):
+            if sorted(list(l)) != list(range(min(l), max(l) + 1)):
+                print('Found non-consecutive stop sequence')
+                raise Exception('NON CONSECUTIVE STOP SEQUENCE')
+
+        tmp_df = raw_nodes_df
+        tmp_df[['trip_id', 'stop_sequence']].groupby('trip_id').apply(
+            lambda x: verify_consecutive(x.stop_sequence))
+        del tmp_df
+
+        # Create direct edges
+        # TODO: Consider making this part parallel: group by trip_id, and then
+        #  split the data to batches of groups (trips). For each group we will
+        #  apply the 'create direct edges' using a pool.
+        # TODO: Consider using `progress_apply` from tqdm library to present
+        #  the progress to the user.
+        raw_nodes_df[['node_id', 'trip_id', 'stop_sequence', 'arrival',
+                  'departure']].groupby('trip_id').apply(
+            self.create_direct_edges_for_trip)
+
+    def create_direct_edges_for_trip(self, raw_nodes_by_trip):
+        # TODO: Save node_id instead of index
+        for index, node in raw_nodes_by_trip.iterrows():
+            stop_seq = node['stop_sequence']
+            # For the same trip we want to take the next node
+            next_node = raw_nodes_by_trip[
+                stop_seq + 1 == raw_nodes_by_trip['stop_sequence']]
+            if next_node.shape[0] == 0:
+                # This is the last node of the current trip, no outgoing edge
+                continue
+            assert next_node.shape[0] == 1
+
+            w = ((next_node['departure'] - node['arrival'])).values[
+                    0] / np.timedelta64(1, 's')
+            d_edge = (node['node_id'], next_node['node_id'].values[0], w)
+            self._direct_edges.add(d_edge)
 
     @staticmethod
     def construct_edges(self, direct_edges, transfer_edges={}):
@@ -127,7 +168,7 @@ TRANSFER_EDGES_PATH = '../output_data/' + V_PATH + 'morning_transfer_edges.pkl'
 OUTPUT_PATH = '../output_data/' + V_PATH
 DEBUG = False
 
-# Should we compute for a service ares instead of access area?
+# Indicates whether we should compute for a service area instead of access area
 SERVICE = False
 
 if __name__ == '__main__':
