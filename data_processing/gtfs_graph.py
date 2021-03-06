@@ -5,13 +5,27 @@ import pandas as pd
 import numpy as np
 from timeit import default_timer as timer
 from time import sleep
+import datetime as dt
 import argparse
+import bisect
 
 # Command line flags
 parser = argparse.ArgumentParser()
 # TODO: Add flags here
 args = parser.parse_args()
 
+#  .-------------------------------------------------------------.
+# '------..-------------..----------..----------..----------..--.|
+# |       \\            ||          ||          ||          ||  ||
+# |        \\           ||          ||          ||          ||  ||
+# |    ..   ||  _    _  ||    _   _ || _    _   ||    _    _||  ||
+# |    ||   || //   //  ||   //  // ||//   //   ||   //   //|| /||
+# |_.------"''----------''----------''----------''----------''--'|
+#  |)|      |       |       |       |    |         |      ||==|  |
+#  | |      |  _-_  |       |       |    |  .-.    |      ||==| C|
+#  | |  __  |.'.-.' |   _   |   _   |    |.'.-.'.  |  __  | "__=='
+#  '---------'|( )|'----------------------'|( )|'----------""
+#              '-'                          '-'
 
 # Represents a graphs based on GTFS data (public transit schedule).
 # This class expects the input data to be valid. If you intend to use this class
@@ -26,6 +40,7 @@ class GtfsGraph:
         self._nodes_df = nodes_df
         self._reversed = reversed_graph
         self._direct_edges = set()
+        self._transfer_edges = set()
 
     # Initializes the graph's direct edges with (NodeA_ID, NodeB_ID, seconds)
     # where NodeA and NodeB are consecutive nodes (stops) in the same trip.
@@ -73,8 +88,117 @@ class GtfsGraph:
             d_edge = (node['node_id'], next_node['node_id'].values[0], w)
             self._direct_edges.add(d_edge)
 
+    def create_transfer_edges(self, raw_nodes_df: pd.DataFrame,
+                              stops_distances_df: pd.DataFrame,
+                              max_distance_meters: float):
+        # assert stops_distances_df.columns == ['from_stop_id', 'to_stop_id',
+        #                                       'dist']
+
+        # Compute walking time between stops that are within the allowed
+        # distance from one another.
+        stops_dists_df = stops_distances_df[
+            stops_distances_df['dist'] < max_distance_meters]
+        # TODO: Extract SVG_WALK_SPEED to flag with default value of 1
+        AVG_WALK_SPEED = 1  # meters per second (m/s)
+        stops_dists_df['walk_time_sec'] = stops_dists_df[
+                                                'dist'] / AVG_WALK_SPEED
+
+        # Reshape the input nodes so that we have each stop ID mapped to all
+        # nodes for that stop, sorted by departure time.
+        stops_to_nodes = raw_nodes_df.groupby('stop_id')[[
+            'node_id', 'trip_id', 'arrival', 'departure', 'route_id']].apply(
+            lambda node: node.values.tolist()).to_dict()
+        DEPARTURE_INDEX = 3  # 'departure' column index in each node.
+        for stop, nodes in stops_to_nodes.items():
+            stops_to_nodes[stop] = sorted(nodes,
+                                          key=lambda x: x[DEPARTURE_INDEX])
+
+        # Compute some stats
+        total_values = 0
+        max_nodes_in_stop = 0
+        for n in stops_to_nodes.values():
+            num_nodes = len(n)
+            if num_nodes > max_nodes_in_stop:
+                max_nodes_in_stop = num_nodes
+            total_values += num_nodes
+        print(
+            f'There is a total of {total_values} nodes in the stops_to_nodes '
+            f'dictionary')
+        print(
+            f'There is an average of {total_values / len(stops_to_nodes)} '
+            f'nodes per stop, and a maximum of {max_nodes_in_stop} nodes in a '
+            f'single stop.')
+
+        # Compute transfer edges
+        self.initialize_transfer_edges(stops_dists_df, stops_to_nodes)
+
+    def initialize_transfer_edges(self, stops_dists_df, stops_to_nodes):
+        ARRIVAL_INDEX = 2
+        DEPARTURE_INDEX = 3
+        ROUTE_ID_INDEX = 4
+        MAX_WAIT_TIME = dt.timedelta(minutes=15)  # TODO: Extract to flag
+
+        stops_to_nodes = dict(stops_to_nodes)
+        edges = []
+        for stop, nodes in stops_to_nodes.items():
+            for start_n in nodes:
+                nearby_stops_df = stops_dists_df[
+                    stops_dists_df['from_stop_id'] == stop]
+                # Add current stop to check transfers from the same stop
+                nearby_stops_df.append(
+                    {'from_stop_id': [stop], 'to_stop_id': [stop],
+                     'dist': [0], 'walk_time_sec': [0]}, ignore_index=True)
+                # TODO: verify this we're not staying on the same line in same
+                #  direction
+                for s in nearby_stops_df.iterrows():
+                    nearby_stop_id = s[1]['to_stop_id']
+                    if nearby_stop_id not in stops_to_nodes:
+                        # Some stops don't have trips that operate all week.
+                        # Some operate only on weekends. If this is such a stop
+                        # we should continue to look at other stops, we won't
+                        # find any nodes here.
+                        continue
+                    nearby_nodes = stops_to_nodes[nearby_stop_id]
+                    second_line_earliest_start_time = \
+                        start_n[ARRIVAL_INDEX] + \
+                        dt.timedelta(seconds=s[1]['walk_time_sec'])
+                    second_line_latest_start_time = \
+                        second_line_earliest_start_time + MAX_WAIT_TIME
+                    # Find index of first node that departs at least at
+                    # second_start_time or later
+                    _, _, _, departures, _ = zip(*nearby_nodes)
+                    i = bisect.bisect_left(departures,
+                                           second_line_earliest_start_time)
+                    while (i < len(nearby_nodes) and
+                           nearby_nodes[i][
+                               DEPARTURE_INDEX] >= second_line_earliest_start_time and
+                           nearby_nodes[i][
+                               DEPARTURE_INDEX] <= second_line_latest_start_time):
+                        node = nearby_nodes[i][0]
+                        if node == start_n[0] or (
+                                nearby_nodes[i][ROUTE_ID_INDEX] == start_n[
+                            ROUTE_ID_INDEX] and s == stop):
+                            # We don't wish to transfer to the same node (no
+                            # self-edges).
+                            # Another case we wish to avoid is transferring to
+                            # the same line (route__id) in the same stop.
+                            i += 1
+                            continue
+                        edges.append(
+                            (start_n[0],
+                             nearby_nodes[i][0],
+                             nearby_nodes[i][DEPARTURE_INDEX] - start_n[ARRIVAL_INDEX]))
+                        i += 1
+
+        # TODO: initialize directly in the loop
+        for s, t, w in edges:
+            self._transfer_edges.add((s, t, w.total_seconds()))
+
     def get_direct_edges(self):
         return self._direct_edges
+
+    def get_transfer_edges(self):
+        return self._transfer_edges
 
     @staticmethod
     def construct_edges(self, direct_edges, transfer_edges={}):
