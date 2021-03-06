@@ -13,6 +13,10 @@ parser = argparse.ArgumentParser()
 args = parser.parse_args()
 
 
+# Represents a graphs based on GTFS data (public transit schedule).
+# This class expects the input data to be valid. If you intend to use this class
+# and are not sure about your data's validity, please perform your own
+# validations beforehand.
 class GtfsGraph:
     def __init__(self, direct_edges, transfer_edges={}, nodes_df=None,
                  reversed_graph=False):
@@ -23,6 +27,9 @@ class GtfsGraph:
         self._reversed = reversed_graph
         self._direct_edges = set()
 
+    # Initializes the graph's direct edges with (NodeA_ID, NodeB_ID, seconds)
+    # where NodeA and NodeB are consecutive nodes (stops) in the same trip.
+    # 'seconds' is the number of seconds it takes to get from NodeA to NodeB.
     def create_direct_edges(self, raw_nodes_df):
         # Sanity check: verify that the stops in each trip are consecutive
         def verify_consecutive(l):
@@ -42,7 +49,7 @@ class GtfsGraph:
         # TODO: Consider using `progress_apply` from tqdm library to present
         #  the progress to the user.
         raw_nodes_df[['node_id', 'trip_id', 'stop_sequence', 'arrival',
-                  'departure']].groupby('trip_id').apply(
+                      'departure']].groupby('trip_id').apply(
             self.create_direct_edges_for_trip)
 
     def create_direct_edges_for_trip(self, raw_nodes_by_trip):
@@ -57,10 +64,17 @@ class GtfsGraph:
                 continue
             assert next_node.shape[0] == 1
 
+            # TODO: This is using arrival at A -> departure from B, and we might
+            #  be double counting here (we count both wait time in A and wait
+            #  time in B, and then in the next edge from B to C we will count
+            #  wait time at B again). Fix this.
             w = ((next_node['departure'] - node['arrival'])).values[
                     0] / np.timedelta64(1, 's')
             d_edge = (node['node_id'], next_node['node_id'].values[0], w)
             self._direct_edges.add(d_edge)
+
+    def get_direct_edges(self):
+        return self._direct_edges
 
     @staticmethod
     def construct_edges(self, direct_edges, transfer_edges={}):
