@@ -98,7 +98,7 @@ class GtfsGraph:
         # distance from one another.
         stops_dists_df = stops_distances_df[
             stops_distances_df['dist'] < max_distance_meters]
-        # TODO: Extract SVG_WALK_SPEED to flag with default value of 1
+        # TODO: Extract AVG_WALK_SPEED to flag with default value of 1
         AVG_WALK_SPEED = 1  # meters per second (m/s)
         stops_dists_df['walk_time_sec'] = stops_dists_df[
                                                 'dist'] / AVG_WALK_SPEED
