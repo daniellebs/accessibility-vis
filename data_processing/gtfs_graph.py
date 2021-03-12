@@ -65,9 +65,9 @@ class GtfsGraph:
         #  the progress to the user.
         raw_nodes_df[['node_id', 'trip_id', 'stop_sequence', 'arrival',
                       'departure']].groupby('trip_id').apply(
-            self.create_direct_edges_for_trip)
+            self.__create_direct_edges_for_trip)
 
-    def create_direct_edges_for_trip(self, raw_nodes_by_trip):
+    def __create_direct_edges_for_trip(self, raw_nodes_by_trip):
         # TODO: Save node_id instead of index
         for index, node in raw_nodes_by_trip.iterrows():
             stop_seq = node['stop_sequence']
@@ -130,9 +130,9 @@ class GtfsGraph:
             f'single stop.')
 
         # Compute transfer edges
-        self.initialize_transfer_edges(stops_dists_df, stops_to_nodes)
+        self.__initialize_transfer_edges(stops_dists_df, stops_to_nodes)
 
-    def initialize_transfer_edges(self, stops_dists_df, stops_to_nodes):
+    def __initialize_transfer_edges(self, stops_dists_df, stops_to_nodes):
         ARRIVAL_INDEX = 2
         DEPARTURE_INDEX = 3
         ROUTE_ID_INDEX = 4
