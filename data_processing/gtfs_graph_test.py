@@ -480,8 +480,8 @@ class GtfsGraphTest(unittest.TestCase):
         gtfs_graph = GtfsGraph(edges, reversed_graph=True)
         gtfs_graph.construct_graph()
 
-        # Compute the reachable nodes and trip times from all source nodes, with
-        # a max trip time of 7.
+        # Compute from which nodes we can reach all others (i.e. service area),
+        # and the matching trip times, with a max trip time of 7.
         result = gtfs_graph.get_reachable_nodes(sources=[0, 1, 2, 3, 4, 5, 6],
                                                 save_to_files=False,
                                                 return_reachable_nodes=True,
