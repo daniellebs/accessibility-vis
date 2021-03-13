@@ -252,6 +252,10 @@ class GtfsGraph:
     def get_reachable_nodes(self, sources, save_to_files=True, debug=False,
                             target=None, return_reachable_nodes=False,
                             max_trip_time_sec=3600):
+        # TODO: Consider splitting this method into two parts:
+        #  (1) compute shortest paths
+        #  (2) materialize reachable nodes
+
         # Make sources match the index of the nodes
         source_nodes_index = [v.index for v in
                               self._graph.vs(name_in=[str(s) for s in sources])]
@@ -290,6 +294,7 @@ class GtfsGraph:
             reachable_df = pd.DataFrame.from_dict(reachable)
             del reachable  # Delete reachable dict from memory
 
+            # TODO: Enforce self._nodes_df to be set, and test new behavior
             if self._nodes_df is not None:
                 reachable_df = reachable_df.merge(
                     self._nodes_df, left_on='target', right_on='node_id').drop(
