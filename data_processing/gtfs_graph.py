@@ -1,5 +1,6 @@
 import igraph
 from multiprocessing import Pool
+import matplotlib.pyplot as plt
 import pickle
 import pandas as pd
 import numpy as np
@@ -13,6 +14,7 @@ import bisect
 parser = argparse.ArgumentParser()
 # TODO: Add flags here
 args = parser.parse_args()
+
 
 #  .-------------------------------------------------------------.
 # '------..-------------..----------..----------..----------..--.|
@@ -33,14 +35,23 @@ args = parser.parse_args()
 # validations beforehand.
 class GtfsGraph:
     def __init__(self, direct_edges, transfer_edges={}, nodes_df=None,
-                 reversed_graph=False):
+                 reversed_graph=False, verbose=False):
+        self._verbose = verbose
+        if verbose:
+            print(f"Direct Edges: {direct_edges}")
+            print(f"Transfer Edges: {transfer_edges}")
         self._edges = self.construct_edges(direct_edges, transfer_edges)
+        if verbose:
+            print(f"Number of edges: {len(self._edges)}")
+            print("Edges: " + ', '.join(
+                [f'({u}, {v}, {w})' for u, v, w in self._edges]))
         self._nodes = self.construct_nodes()
         self._graph = igraph.Graph()
         self._nodes_df = nodes_df
         self._reversed = reversed_graph
         self._direct_edges = set()
         self._transfer_edges = set()
+        self._graph_nodes_index = []
 
     # Initializes the graph's direct edges with (NodeA_ID, NodeB_ID, seconds)
     # where NodeA and NodeB are consecutive nodes (stops) in the same trip.
@@ -101,7 +112,7 @@ class GtfsGraph:
         # TODO: Extract AVG_WALK_SPEED to flag with default value of 1
         AVG_WALK_SPEED = 1  # meters per second (m/s)
         stops_dists_df['walk_time_sec'] = stops_dists_df[
-                                                'dist'] / AVG_WALK_SPEED
+                                              'dist'] / AVG_WALK_SPEED
 
         # Reshape the input nodes so that we have each stop ID mapped to all
         # nodes for that stop, sorted by departure time.
@@ -121,13 +132,14 @@ class GtfsGraph:
             if num_nodes > max_nodes_in_stop:
                 max_nodes_in_stop = num_nodes
             total_values += num_nodes
-        print(
-            f'There is a total of {total_values} nodes in the stops_to_nodes '
-            f'dictionary')
-        print(
-            f'There is an average of {total_values / len(stops_to_nodes)} '
-            f'nodes per stop, and a maximum of {max_nodes_in_stop} nodes in a '
-            f'single stop.')
+        if self._verbose:
+            print(
+                f'There is a total of {total_values} nodes in the '
+                f'stops_to_nodes dictionary')
+            print(
+                f'There is an average of {total_values / len(stops_to_nodes)} '
+                f'nodes per stop, and a maximum of {max_nodes_in_stop} nodes '
+                f'in a single stop.')
 
         # Compute transfer edges
         self.__initialize_transfer_edges(stops_dists_df, stops_to_nodes)
@@ -187,7 +199,8 @@ class GtfsGraph:
                         edges.append(
                             (start_n[0],
                              nearby_nodes[i][0],
-                             nearby_nodes[i][DEPARTURE_INDEX] - start_n[ARRIVAL_INDEX]))
+                             nearby_nodes[i][DEPARTURE_INDEX] - start_n[
+                                 ARRIVAL_INDEX]))
                         i += 1
 
         # TODO: initialize directly in the loop
@@ -200,7 +213,6 @@ class GtfsGraph:
     def get_transfer_edges(self):
         return self._transfer_edges
 
-    @staticmethod
     def construct_edges(self, direct_edges, transfer_edges={}):
         return [(str(u), str(v), w) for u, v, w in
                 set(direct_edges).union(set(transfer_edges))]
@@ -221,6 +233,8 @@ class GtfsGraph:
         s = timer()
         self._graph = igraph.Graph.TupleList(self._edges, weights=True,
                                              directed=True)
+        # TODO: consider making this a dictionary for easy mapping
+        self._graph_nodes_index = [n.index for n in self._graph.vs()]
 
         e = timer()
         print(igraph.summary(self._graph))
@@ -235,41 +249,58 @@ class GtfsGraph:
     def get_nodes(self):
         return self._nodes
 
-    def get_shortest_paths(self, sources, save_to_files=True, debug=False,
-                           target=None):
+    def get_reachable_nodes(self, sources, save_to_files=True, debug=False,
+                            target=None, return_reachable_nodes=False,
+                            max_trip_time_sec=3600):
+        # Make sources match the index of the nodes
+        source_nodes_index = [v.index for v in
+                              self._graph.vs(name_in=[str(s) for s in sources])]
+
+        if self._verbose:
+            print(f"Getting reachable nodes from sources: {sources}")
+            print("Edges:")
+            for edge in self._graph.es.select():
+                print(edge)
+            print("Nodes:")
+            for node in self._graph.vs.select():
+                print(node)
         if not debug:
             mode = igraph.IN if self._reversed else igraph.OUT
-            sp = self._graph.shortest_paths_dijkstra(source=sources,
-                                                     target=self._nodes,
-                                                     weights='weight',
-                                                     mode=mode)
+            sp = self._graph.shortest_paths_dijkstra(
+                source=source_nodes_index,
+                target=self._graph_nodes_index,
+                weights='weight',
+                mode=mode)
 
-            max_len_sec = 3600  # 1 hour
             reachable = {'source': [], 'target': [], 'time_sec': []}
-            for i, source in enumerate(sources):
+            for i, source in enumerate(source_nodes_index):
                 # Verify all results and correct length
                 assert len(self._nodes) == len(sp[i])
                 dists = sp[i]
 
                 # Go through all targets and save only reachable nodes
                 for target_i, d in enumerate(dists):
-                    if d <= max_len_sec:
-                        reachable['source'].append(int(source))
-                        reachable['target'].append(int(self._nodes[target_i]))
+                    if d <= max_trip_time_sec:
+                        reachable['source'].append(
+                            int(self._graph.vs(source)['name'][0]))
+                        reachable['target'].append(
+                            int(self._graph.vs(target_i)['name'][0]))
                         reachable['time_sec'].append(d)
 
             reachable_df = pd.DataFrame.from_dict(reachable)
             del reachable  # Delete reachable dict from memory
 
-            reachable_df = reachable_df.merge(
-                self._nodes_df, left_on='target', right_on='node_id').drop(
-                ['target', 'node_id', 'departure'], axis=1)
-            reachable_df = reachable_df.merge(
-                self._nodes_df, left_on='source', right_on='node_id',
-                suffixes=('_target', '_source')).drop(
-                ['source', 'node_id', 'arrival_source'], axis=1)
-            reachable_df = reachable_df.sort_values('time_sec').groupby(
-                ['stop_id_source', 'stop_id_target'], as_index=False).first()
+            if self._nodes_df is not None:
+                reachable_df = reachable_df.merge(
+                    self._nodes_df, left_on='target', right_on='node_id').drop(
+                    ['target', 'node_id', 'departure'], axis=1)
+                reachable_df = reachable_df.merge(
+                    self._nodes_df, left_on='source', right_on='node_id',
+                    suffixes=('_target', '_source')).drop(
+                    ['source', 'node_id', 'arrival_source'], axis=1)
+                reachable_df = reachable_df.sort_values('time_sec').groupby(
+                    ['stop_id_source', 'stop_id_target'],
+                    as_index=False).first()
 
             if save_to_files:
                 paths_type = 'sa' if self._reversed else 'aa'  # Service Area or Access Area
@@ -278,12 +309,17 @@ class GtfsGraph:
                     sources[-1]) + '.pkl'
                 reachable_df.to_pickle(filename)
 
+            if return_reachable_nodes:
+                return reachable_df
+
         if debug:
             print(f'Trying to get a shortest path from {sources} to {target}')
             assert target is not None, 'In debug mode the target must be set'
-            sp = self._graph.get_shortest_path_dijkstra(sources, to=target,
-                                                        weights='weight',
-                                                        mode=igraph.OUT)
+            sp = self._graph.get_shortest_path_dijkstra(
+                source_nodes_index,
+                to=self._graph.vs(name=target).index,
+                weights='weight',
+                mode=igraph.OUT)
             print('======================')
             print(f'Path to node {sp[-1]} is {sp}')
 
@@ -338,7 +374,7 @@ if __name__ == '__main__':
 
     start = timer()
     p = Pool()
-    p.map(gtfs_graph.get_shortest_paths, pool_input)
+    p.map(gtfs_graph.get_reachable_nodes, pool_input)
     p.close()
     p.join()
     end = timer()

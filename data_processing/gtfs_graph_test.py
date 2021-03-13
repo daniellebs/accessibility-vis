@@ -34,7 +34,7 @@ class GtfsGraphTest(unittest.TestCase):
 
         # Create direct edges and verify result.
         self.gtfs_graph.create_direct_edges(raw_nodes_df)
-        self.assertEqual({(1, 2, 5*60), (2, 3, 1*60)},
+        self.assertEqual({(1, 2, 5 * 60), (2, 3, 1 * 60)},
                          self.gtfs_graph.get_direct_edges())
 
     def test_create_direct_edges_two_trips(self):
@@ -55,9 +55,9 @@ class GtfsGraphTest(unittest.TestCase):
 
         # Create direct edges and verify result.
         self.gtfs_graph.create_direct_edges(raw_nodes_df)
-        self.assertEqual({(1, 3, 5*60),
-                          (3, 5, 1*60),
-                          (2, 4, 10*60)},
+        self.assertEqual({(1, 3, 5 * 60),
+                          (3, 5, 1 * 60),
+                          (2, 4, 10 * 60)},
                          self.gtfs_graph.get_direct_edges())
 
     def test_create_transfer_edges_same_stop_transfer(self):
@@ -119,10 +119,8 @@ class GtfsGraphTest(unittest.TestCase):
         # Create transfer edges and verify result.
         self.gtfs_graph.create_transfer_edges(raw_nodes_df, stops_distances_df,
                                               100)
-        self.assertEqual({(2, 6, 3*60)},
+        self.assertEqual({(2, 6, 3 * 60)},
                          self.gtfs_graph.get_transfer_edges())
-
-    # TODO: Add tests for transfer between stops, non-possible transfers etc.
 
     def test_create_transfer_edges_walk_to_another_stop(self):
         # ┌─────────────┐           ┌─────────────┐
@@ -334,7 +332,7 @@ class GtfsGraphTest(unittest.TestCase):
             [5, 5, 0],
             [6, 6, 0],
             [2, 5, 90]  # 90m, based on average walk speed of 1m/s, meaning
-                        # it'll take 90 seconds to walk from stop 2 to stop 5.
+            # it'll take 90 seconds to walk from stop 2 to stop 5.
         ]
         stops_distances_df = pd.DataFrame(stops_distances,
                                           columns=['from_stop_id',
@@ -346,6 +344,180 @@ class GtfsGraphTest(unittest.TestCase):
                                               100)
         self.assertEqual(set(),
                          self.gtfs_graph.get_transfer_edges())
+
+    def test_get_reachable_nodes_simple_graph(self):
+        # DAG (Directed Acyclic Graph) is the expected input.
+        #           ┌───┐
+        #     ┌─1──►│ 1 │
+        #     │     └───┘
+        #   ┌─┴─┐
+        #   │ 0 │
+        #   └─┬─┘
+        #     │     ┌───┐
+        #     └─2──►│ 2 │
+        #           └───┘
+        edges = {
+            # n1, n2, weight
+            (0, 1, 1),
+            (0, 2, 2)
+        }
+        gtfs_graph = GtfsGraph(edges)
+        gtfs_graph.construct_graph()
+
+        # Compute the reachable nodes and trip times from all source nodes, with
+        # a max trip time of 7.
+        result = gtfs_graph.get_reachable_nodes(sources=[0, 1, 2],
+                                                save_to_files=False,
+                                                return_reachable_nodes=True,
+                                                max_trip_time_sec=7)
+
+        expected = [
+            # source, target, time
+            (0, 0, 0.0),
+            (0, 1, 1.0),
+            (0, 2, 2.0),
+            (1, 1, 0.0),
+            (2, 2, 0.0)
+        ]
+        expected_df = pd.DataFrame(expected,
+                                   columns=['source',
+                                            'target',
+                                            'time_sec'])
+
+        self.assertEqual(
+            result.sort_values(['source', 'target']).to_dict('list'),
+            expected_df.sort_values(
+                ['source', 'target']).to_dict('list'))
+
+    def test_get_reachable_nodes_access_area(self):
+        # DAG (Directed Acyclic Graph) is the expected input.
+        #           ┌───┐            ┌───┐
+        #     ┌─1──►│ 1 ├─────┬─3───►│ 4 │
+        #     │     └───┘    1│      └───┘
+        #   ┌─┴─┐           ┌─▼─┐            ┌───┐
+        #   │ 0 │           │ 3 ├────6──────►│ 6 │
+        #   └─┬─┘           └─▲─┘            └─▲─┘
+        #     │               │                │
+        #     │     ┌───┐    2│      ┌───┐     │
+        #     └─2──►│ 2 ├─────┴──4──►│ 5 ├───4─┘
+        #           └───┘            └───┘
+        edges = {
+            # n1, n2, weight
+            (0, 1, 1),
+            (0, 2, 2),
+            (1, 3, 1),
+            (1, 4, 3),
+            (2, 3, 2),
+            (2, 5, 4),
+            (3, 6, 6),
+            (5, 6, 4)
+        }
+        gtfs_graph = GtfsGraph(edges)
+        gtfs_graph.construct_graph()
+
+        # Compute the reachable nodes and trip times from all source nodes, with
+        # a max trip time of 7.
+        result = gtfs_graph.get_reachable_nodes(sources=[0, 1, 2, 3, 4, 5, 6],
+                                                save_to_files=False,
+                                                return_reachable_nodes=True,
+                                                max_trip_time_sec=7)
+
+        expected = [
+            # source, target, time
+            (0, 0, 0.0),
+            (0, 1, 1.0),
+            (0, 2, 2.0),
+            (0, 3, 2.0),
+            (0, 4, 4.0),
+            (0, 5, 6.0),
+            (1, 1, 0.0),
+            (1, 3, 1.0),
+            (1, 4, 3.0),
+            (1, 6, 7.0),
+            (2, 2, 0.0),
+            (2, 3, 2.0),
+            (2, 5, 4.0),
+            (3, 3, 0.0),
+            (3, 6, 6.0),
+            (4, 4, 0.0),
+            (5, 5, 0.0),
+            (5, 6, 4.0),
+            (6, 6, 0.0)
+        ]
+        expected_df = pd.DataFrame(expected,
+                                   columns=['source',
+                                            'target',
+                                            'time_sec'])
+
+        self.assertEqual(
+            result.sort_values(['source', 'target']).to_dict('list'),
+            expected_df.sort_values(
+                ['source', 'target']).to_dict('list'))
+
+    def test_get_reachable_nodes_service_area(self):
+        # DAG (Directed Acyclic Graph) is the expected input.
+        #           ┌───┐            ┌───┐
+        #     ┌─1──►│ 1 ├─────┬─3───►│ 4 │
+        #     │     └───┘    1│      └───┘
+        #   ┌─┴─┐           ┌─▼─┐            ┌───┐
+        #   │ 0 │           │ 3 ├────6──────►│ 6 │
+        #   └─┬─┘           └─▲─┘            └─▲─┘
+        #     │               │                │
+        #     │     ┌───┐    2│      ┌───┐     │
+        #     └─2──►│ 2 ├─────┴──4──►│ 5 ├───4─┘
+        #           └───┘            └───┘
+        edges = {
+            # n1, n2, weight
+            (0, 1, 1),
+            (0, 2, 2),
+            (1, 3, 1),
+            (1, 4, 3),
+            (2, 3, 2),
+            (2, 5, 4),
+            (3, 6, 6),
+            (5, 6, 4)
+        }
+        gtfs_graph = GtfsGraph(edges, reversed_graph=True)
+        gtfs_graph.construct_graph()
+
+        # Compute the reachable nodes and trip times from all source nodes, with
+        # a max trip time of 7.
+        result = gtfs_graph.get_reachable_nodes(sources=[0, 1, 2, 3, 4, 5, 6],
+                                                save_to_files=False,
+                                                return_reachable_nodes=True,
+                                                max_trip_time_sec=7)
+
+        expected = [
+            # target, source, time
+            (0, 0, 0.0),
+            (1, 0, 1.0),
+            (2, 0, 2.0),
+            (3, 0, 2.0),
+            (4, 0, 4.0),
+            (5, 0, 6.0),
+            (1, 1, 0.0),
+            (3, 1, 1.0),
+            (4, 1, 3.0),
+            (6, 1, 7.0),
+            (2, 2, 0.0),
+            (3, 2, 2.0),
+            (5, 2, 4.0),
+            (3, 3, 0.0),
+            (6, 3, 6.0),
+            (4, 4, 0.0),
+            (5, 5, 0.0),
+            (6, 5, 4.0),
+            (6, 6, 0.0)
+        ]
+        expected_df = pd.DataFrame(expected,
+                                   columns=['source',
+                                            'target',
+                                            'time_sec'])
+
+        self.assertEqual(
+            result.sort_values(['source', 'target']).to_dict('list'),
+            expected_df.sort_values(
+                ['source', 'target']).to_dict('list'))
 
 
 if __name__ == '__main__':
